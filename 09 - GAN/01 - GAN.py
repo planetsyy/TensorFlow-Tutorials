@@ -1,6 +1,11 @@
 # 2016년에 가장 관심을 많이 받았던 비감독(Unsupervised) 학습 방법인
 # Generative Adversarial Network(GAN)을 구현해봅니다.
 # https://arxiv.org/abs/1406.2661
+
+#########
+# 기본적인import,데이터가져오기
+######
+
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,18 +16,20 @@ mnist = input_data.read_data_sets("./mnist/data/", one_hot=True)
 #########
 # 옵션 설정
 ######
-total_epoch = 100
-batch_size = 100
-learning_rate = 0.0002
+total_epoch = 100      # 반복 수행 횟수
+batch_size = 100       # 한번에 만드는 이미지 갯수
+learning_rate = 0.0002 # 학습 시 변수를 조정하는 정도
 # 신경망 레이어 구성 옵션
-n_hidden = 256
-n_input = 28 * 28
-n_noise = 128  # 생성기의 입력값으로 사용할 노이즈의 크기
+n_hidden = 256         # 신경망(두뇌)의 복잡도
+n_input = 28 * 28      # 입력이미지의 크기
+n_noise = 128          # 생성기의 입력값으로 사용할 노이즈의 크기
 
 #########
 # 신경망 모델 구성
 ######
-# GAN 도 Unsupervised 학습이므로 Autoencoder 처럼 Y 를 사용하지 않습니다.
+################################모델 생성 시작################################################
+################################공장이라고보면=>생산기계를 만드는 과정################################################
+# 입력 이미지 X
 X = tf.placeholder(tf.float32, [None, n_input])
 # 노이즈 Z를 입력값으로 사용합니다.
 Z = tf.placeholder(tf.float32, [None, n_noise])
@@ -36,7 +43,8 @@ G_b2 = tf.Variable(tf.zeros([n_input]))
 # 판별기 신경망에 사용하는 변수들입니다.
 D_W1 = tf.Variable(tf.random_normal([n_input, n_hidden], stddev=0.01))
 D_b1 = tf.Variable(tf.zeros([n_hidden]))
-# 판별기의 최종 결과값은 얼마나 진짜와 가깝냐를 판단하는 한 개의 스칼라값입니다.
+# 판별기의 최종 결과값은 얼마나 진짜와 가깝냐를 판단하는 단 하나의 값
+# 판별기에서 열심히 계산한 결과를 단 하나의 값으로 만들기 위해 아래의 연산을 사용
 D_W2 = tf.Variable(tf.random_normal([n_hidden, 1], stddev=0.01))
 D_b2 = tf.Variable(tf.zeros([1]))
 
@@ -65,27 +73,24 @@ def discriminator(inputs):
 def get_noise(batch_size, n_noise):
     return np.random.normal(size=(batch_size, n_noise))
 
+################################모델 생성 완료################################################
 
-# 노이즈를 이용해 랜덤한 이미지를 생성합니다.
+
+################################학습 시나리오 작성 시작################################################
+################################공장이라고보면=>생산기계를 배치하는 과정################################################
+# 1. (생성자)노이즈를 이용해 랜덤한 이미지를 생성합니다.
 G = generator(Z)
-# 노이즈를 이용해 생성한 이미지가 진짜 이미지인지 판별한 값을 구합니다.
-D_gene = discriminator(G)
-# 진짜 이미지를 이용해 판별한 값을 구합니다.
-D_real = discriminator(X)
 
-# 논문에 따르면, GAN 모델의 최적화는 loss_G 와 loss_D 를 최대화 하는 것 입니다.
-# 다만 loss_D와 loss_G는 서로 연관관계가 있기 때문에 두 개의 손실값이 항상 같이 증가하는 경향을 보이지는 않을 것 입니다.
-# loss_D가 증가하려면 loss_G는 하락해야하고, loss_G가 증가하려면 loss_D는 하락해야하는 경쟁관계에 있기 때문입니다.
-# 논문의 수식에 따른 다음 로직을 보면 loss_D 를 최대화하기 위해서는 D_gene 값을 최소화하게 됩니다.
-# 판별기에 진짜 이미지를 넣었을 때에도 최대값을 : tf.log(D_real)
-# 가짜 이미지를 넣었을 때에도 최대값을 : tf.log(1 - D_gene)
-# 갖도록 학습시키기 때문입니다.
-# 이것은 판별기는 생성기가 만들어낸 이미지가 가짜라고 판단하도록 판별기 신경망을 학습시킵니다.
+################################공장이라고보면=>작업하는 룰을 결정하는 과정################################################
+# 2-1. (판별자)노이즈를 이용해 생성한 이미지가 진짜 이미지인지 판별한 값을 구합니다.
+D_gene = discriminator(G)      # 가짜이미지 판별 => 0일수록 좋음
+# 2-2. (판별자)진짜 이미지를 이용해 판별한 값을 구합니다.
+D_real = discriminator(X)      # 진짜이미지 판별 => 1일수록 좋음
+# 2-3. (판별자) D_gene(가짜이미지 판별)은 최대한작게, D_real(진짜이미지 판별)은 최대한크게 만들도록 내부변수를 조정
 loss_D = tf.reduce_mean(tf.log(D_real) + tf.log(1 - D_gene))
-# 반면 loss_G 를 최대화하기 위해서는 D_gene 값을 최대화하게 되는데,
-# 이것은 가짜 이미지를 넣었을 때, 판별기가 최대한 실제 이미지라고 판단하도록 생성기 신경망을 학습시킵니다.
-# 논문에서는 loss_D 와 같은 수식으로 최소화 하는 생성기를 찾지만,
-# 결국 D_gene 값을 최대화하는 것이므로 다음과 같이 사용할 수 있습니다.
+
+
+# (생성자) D_gene(가짜이미지 판별)을 최대한크게하도록 내부변수를 조정
 loss_G = tf.reduce_mean(tf.log(D_gene))
 
 # loss_D 를 구할 때는 판별기 신경망에 사용되는 변수만 사용하고,
@@ -93,6 +98,7 @@ loss_G = tf.reduce_mean(tf.log(D_gene))
 D_var_list = [D_W1, D_b1, D_W2, D_b2]
 G_var_list = [G_W1, G_b1, G_W2, G_b2]
 
+########## <공장이라고생각하면=>이전 결과를 토대로 작업방식을 최적화하는 방법을 정함> ##########
 # GAN 논문의 수식에 따르면 loss 를 극대화 해야하지만, minimize 하는 최적화 함수를 사용하기 때문에
 # 최적화 하려는 loss_D 와 loss_G 에 음수 부호를 붙여줍니다.
 train_D = tf.train.AdamOptimizer(learning_rate).minimize(-loss_D,
@@ -100,15 +106,20 @@ train_D = tf.train.AdamOptimizer(learning_rate).minimize(-loss_D,
 train_G = tf.train.AdamOptimizer(learning_rate).minimize(-loss_G,
                                                          var_list=G_var_list)
 
+################################학습 시나리오 작성 완료################################################
+
 #########
 # 신경망 모델 학습
 ######
+
+################################학습 시나리오 실행 시작################################################
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
 total_batch = int(mnist.train.num_examples/batch_size)
 loss_val_D, loss_val_G = 0, 0
 
+########## <공장이라고생각하면=>전기와 원재료를 넣어서 공장을 가동함> ##########
 for epoch in range(total_epoch):
     for i in range(total_batch):
         batch_xs, batch_ys = mnist.train.next_batch(batch_size)
@@ -142,3 +153,4 @@ for epoch in range(total_epoch):
         plt.close(fig)
 
 print('최적화 완료!')
+################################학습 시나리오 실행 완료################################################
